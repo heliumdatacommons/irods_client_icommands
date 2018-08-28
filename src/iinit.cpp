@@ -348,18 +348,29 @@ main( int argc, char **argv ) {
     } // if pam
     
     if ( strcmp( my_env.rodsAuthScheme, AUTH_OPENID_SCHEME ) == 0 ) {
-        std::string client_provider_cfg;
-        try {
-            client_provider_cfg = irods::get_environment_property<std::string&>("openid_provider");
-        }
-        catch( const irods::error& e ) {
-            rodsLog( LOG_DEBUG, "openid_provider not defined" );
-            return 1;
-        }
         irods::kvp_map_t ctx_map;
-        ctx_map["provider"] = client_provider_cfg;
+        try {
+            std::string client_provider_cfg = irods::get_environment_property<std::string&>( "openid_provider" );
+            ctx_map["provider"] = client_provider_cfg;
+        }
+        catch ( const irods::exception& e ) {
+            if ( e.code() == KEY_NOT_FOUND ) {
+                rodsLog( LOG_DEBUG, "KEY_NOT_FOUND: openid_provider not defined" );
+            }
+            else {
+                rodsLog( LOG_DEBUG, "unknown error" );
+                irods::log( e );
+            }
+        }
+        ctx_map["nobuildctx"] = "1";
+        ctx_map["reprompt"] = "1";
+        if ( password && *password ) {
+            // for openid, if password not empty send as initialization value
+            ctx_map["iinit_arg"] = password;
+        }
+
         std::string ctx_str = irods::escaped_kvp_string( ctx_map );
-        status = clientLoginOpenID( Conn, ctx_str.c_str(), 1 );
+        status = clientLogin( Conn, ctx_str.c_str(), "openid" );
     }
     else {
         // =-=-=-=-=-=-=-
